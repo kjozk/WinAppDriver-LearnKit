@@ -20,7 +20,7 @@ jobs:
         shell: powershell
 
       - name: Build solution
-        run: msbuild "WinAppDriver-LearnKit.slnx" /p:Configuration=Debug /m
+        run: msbuild "WinAppDriver-LearnKit.sln" /p:Configuration=Debug /m
         shell: powershell
 
       - name: Install WinAppDriver
