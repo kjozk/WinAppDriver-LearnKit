@@ -45,32 +45,30 @@ jobs:
       - name: WinAppDriver 起動
         shell: powershell
         run: |
-          $exe = 'C:\Program Files (x86)\Windows Application Driver\WinAppDriver.exe'
-          if (-not (Test-Path $exe)) { Write-Host "WinAppDriver not found at $exe"; exit 1 }
-          Start-Process -FilePath $exe -ArgumentList '4723'
-          Start-Sleep -Seconds 5
+            $exe = 'C:\Program Files (x86)\Windows Application Driver\WinAppDriver.exe'
+            if (-not (Test-Path $exe)) { Write-Host "WinAppDriver not found at $exe"; exit 1 }
+            Start-Process -FilePath $exe -ArgumentList '4723'
+            Start-Sleep -Seconds 5
 
       - name: テスト実行（vstest 検索・trx ロガー）
         shell: powershell
         run: |
-          $dll = Get-ChildItem -Path tests -Recurse -Filter *SampleApp.Tests.UI.dll | Select-Object -First 1
-          if (-not $dll) { Write-Error 'Test assembly not found'; exit 1 }
+            # テストアセンブリを探す
+            $dll = Get-ChildItem -Path tests -Recurse -Filter *SampleApp.Tests.UI.dll | Select-Object -First 1
+            if (-not $dll) { Write-Error 'Test assembly not found'; exit 1 }
 
-          $vstestCmd = (Get-Command vstest.console.exe -ErrorAction SilentlyContinue).Source
-          if (-not $vstestCmd) {
+            # vstest.console.exe を vswhere で取得
             $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
-            if (Test-Path $vswhere) {
-              $vsPath = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.TestTools.TestPlatform -property installationPath
-              if ($vsPath) {
-                $candidate = Join-Path $vsPath "Common7\IDE\CommonExtensions\Microsoft\TestWindow\vstest.console.exe"
-                if (Test-Path $candidate) { $vstestCmd = $candidate }
-              }
-            }
-          }
+            if (-not (Test-Path $vswhere)) { Write-Error 'vswhere.exe not found'; exit 1 }
 
-          if (-not $vstestCmd) { Write-Error 'vstest.console.exe not found on PATH or in Visual Studio installation'; exit 1 }
+            $vsPath = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.TestTools.TestPlatform -property installationPath
+            if (-not $vsPath) { Write-Error 'Visual Studio installation not found'; exit 1 }
 
-          & $vstestCmd $dll.FullName /Logger:trx
+            $vstestCmd = Join-Path $vsPath "Common7\IDE\CommonExtensions\Microsoft\TestWindow\vstest.console.exe"
+            if (-not (Test-Path $vstestCmd)) { Write-Error 'vstest.console.exe not found'; exit 1 }
+
+            # テスト実行
+            & $vstestCmd $dll.FullName /Logger:trx
 
       - name: TRX テスト結果をアップロード
         uses: actions/upload-artifact@v4
