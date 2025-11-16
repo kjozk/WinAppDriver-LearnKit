@@ -9,7 +9,7 @@ on:
 jobs:
   ui-tests:
     name: ビルド・UI テスト (Windows)
-    runs-on: windows-latest
+    runs-on: windows-2022
     timeout-minutes: 60
     steps:
       - name: チェックアウト
@@ -26,36 +26,10 @@ jobs:
             Write-Host "No .sln file found. Skipping nuget restore."
           }
 
-      - name: ソリューション ビルド（vswhere で msbuild 検索）
+      - name: ソリューション ビルド
         shell: powershell
         run: |
-          $sln = Get-ChildItem -Path . -Recurse -Filter *.sln | Select-Object -First 1
-          if (-not $sln) { Write-Error 'No .sln found in repository'; exit 1 }
-
-          $msbuildPath = $null
-          if (Get-Command msbuild.exe -ErrorAction SilentlyContinue) {
-            $msbuildPath = (Get-Command msbuild.exe).Source
-          } else {
-            $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
-            if (Test-Path $vswhere) {
-              $vsPath = & $vswhere -latest -products * -property installationPath
-              if ($vsPath) {
-                $candidates = @(
-                  "$vsPath\MSBuild\Current\Bin\MSBuild.exe",
-                  "$vsPath\MSBuild\17\Bin\MSBuild.exe",
-                  "$vsPath\MSBuild\16\Bin\MSBuild.exe"
-                )
-                foreach ($candidate in $candidates) {
-                  if (Test-Path $candidate) { $msbuildPath = $candidate; break }
-                }
-              }
-            }
-          }
-
-          if (-not $msbuildPath) { Write-Error "msbuild.exe not found on PATH or in Visual Studio installation"; exit 1 }
-
-          Write-Host "Using msbuild from: $msbuildPath"
-          & $msbuildPath $sln.FullName /p:Configuration=Debug /m
+          msbuild "WinAppDriver-LearnKit.sln" /p:Configuration=Debug /m
 
       - name: WinAppDriver インストール
         shell: powershell
