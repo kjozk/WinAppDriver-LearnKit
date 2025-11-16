@@ -26,22 +26,36 @@ jobs:
             Write-Host "No .sln file found. Skipping nuget restore."
           }
 
-      - name: ソリューション ビルド（シンプル フォールバック）
+      - name: ソリューション ビルド（vswhere で msbuild 検索）
         shell: powershell
         run: |
           $sln = Get-ChildItem -Path . -Recurse -Filter *.sln | Select-Object -First 1
           if (-not $sln) { Write-Error 'No .sln found in repository'; exit 1 }
 
+          $msbuildPath = $null
           if (Get-Command msbuild.exe -ErrorAction SilentlyContinue) {
-            Write-Host "Using msbuild from PATH to build $($sln.FullName)"
-            msbuild $sln.FullName /p:Configuration=Debug /m
-          } elseif (Get-Command dotnet -ErrorAction SilentlyContinue) {
-            Write-Host "msbuild not found; falling back to dotnet build for $($sln.FullName)"
-            dotnet build $sln.FullName -c Debug
+            $msbuildPath = (Get-Command msbuild.exe).Source
           } else {
-            Write-Error "Neither msbuild nor dotnet found. Ensure Visual Studio or .NET SDK is available on the runner."
-            exit 1
+            $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+            if (Test-Path $vswhere) {
+              $vsPath = & $vswhere -latest -products * -property installationPath
+              if ($vsPath) {
+                $candidates = @(
+                  "$vsPath\MSBuild\Current\Bin\MSBuild.exe",
+                  "$vsPath\MSBuild\17\Bin\MSBuild.exe",
+                  "$vsPath\MSBuild\16\Bin\MSBuild.exe"
+                )
+                foreach ($candidate in $candidates) {
+                  if (Test-Path $candidate) { $msbuildPath = $candidate; break }
+                }
+              }
+            }
           }
+
+          if (-not $msbuildPath) { Write-Error "msbuild.exe not found on PATH or in Visual Studio installation"; exit 1 }
+
+          Write-Host "Using msbuild from: $msbuildPath"
+          & $msbuildPath $sln.FullName /p:Configuration=Debug /m
 
       - name: WinAppDriver インストール
         shell: powershell
