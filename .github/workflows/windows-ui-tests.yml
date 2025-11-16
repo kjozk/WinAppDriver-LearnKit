@@ -9,7 +9,7 @@ on:
 jobs:
   ui-tests:
     name: ビルド・UI テスト (Windows)
-    runs-on: windows-2022
+    runs-on: windows-latest
     timeout-minutes: 60
     steps:
       - name: チェックアウト
@@ -29,7 +29,14 @@ jobs:
       - name: ソリューション ビルド
         shell: powershell
         run: |
-          msbuild "WinAppDriver-LearnKit.sln" /p:Configuration=Debug /m
+            # Visual Studio インストールパスを取得
+            $vsPath = & "C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.Component.MSBuild -property installationPath
+
+            # MSBuild.exe のパス
+            $msbuildPath = Join-Path $vsPath "MSBuild\Current\Bin\MSBuild.exe"
+
+            # ビルド実行
+            & $msbuildPath "WinAppDriver-LearnKit.sln" /p:Configuration=Debug /m
 
       - name: WinAppDriver インストール
         shell: powershell
