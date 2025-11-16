@@ -50,25 +50,29 @@ jobs:
             Start-Process -FilePath $exe -ArgumentList '4723'
             Start-Sleep -Seconds 5
 
-      - name: テスト実行（vstest 検索・trx ロガー）
+      - name: テスト実行（DLL 相対パス指定）
         shell: powershell
         run: |
-            # テストアセンブリを探す
-            $dll = Get-ChildItem -Path tests -Recurse -Filter *SampleApp.Tests.UI.dll | Select-Object -First 1
-            if (-not $dll) { Write-Error 'Test assembly not found'; exit 1 }
+            # まず既知の相対パスを優先して探す
+            $dllPath = Join-Path $PWD "tests\SampleApp.Tests.UI\bin\Debug\SampleApp.Tests.UI.dll"
+            if (-not (Test-Path $dllPath)) {
+              Write-Host "DLL not found at $dllPath. Searching under tests..."
+              $dll = Get-ChildItem -Path tests -Recurse -Filter *SampleApp.Tests.UI.dll | Select-Object -First 1
+              if (-not $dll) { Write-Error 'Test assembly not found'; exit 1 } else { $dllPath = $dll.FullName }
+            } else { Write-Host "Found test dll: $dllPath" }
 
-            # vstest.console.exe を vswhere で取得
-            $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
-            if (-not (Test-Path $vswhere)) { Write-Error 'vswhere.exe not found'; exit 1 }
-
-            $vsPath = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.TestTools.TestPlatform -property installationPath
-            if (-not $vsPath) { Write-Error 'Visual Studio installation not found'; exit 1 }
-
-            $vstestCmd = Join-Path $vsPath "Common7\IDE\CommonExtensions\Microsoft\TestWindow\vstest.console.exe"
-            if (-not (Test-Path $vstestCmd)) { Write-Error 'vstest.console.exe not found'; exit 1 }
-
-            # テスト実行
-            & $vstestCmd $dll.FullName /Logger:trx
+            # vstest.console.exe が PATH にあればそれを使う。なければ dotnet vstest を試す。
+            $vstest = Get-Command vstest.console.exe -ErrorAction SilentlyContinue
+            if ($vstest) {
+              Write-Host "Running tests with vstest.console.exe"
+              & $vstest.Source $dllPath /Logger:trx
+            } elseif (Get-Command dotnet -ErrorAction SilentlyContinue) {
+              Write-Host "vstest not found; falling back to 'dotnet vstest'"
+              dotnet vstest $dllPath --logger trx
+            } else {
+              Write-Error "Neither vstest.console.exe nor dotnet were found. Cannot run tests."
+              exit 1
+            }
 
       - name: TRX テスト結果をアップロード
         uses: actions/upload-artifact@v4
