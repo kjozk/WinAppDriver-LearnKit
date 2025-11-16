@@ -1,4 +1,4 @@
-name: Windows UI Tests
+name: Windows UI テスト
 
 on:
   push:
@@ -8,34 +8,55 @@ on:
 
 jobs:
   ui-tests:
-    name: Build and UI Tests (Windows)
+    name: ビルド・UI テスト (Windows)
     runs-on: windows-latest
     timeout-minutes: 60
     steps:
-      - name: Checkout
+      - name: チェックアウト
         uses: actions/checkout@v4
 
-      - name: Restore NuGet packages
-        run: nuget restore "WinAppDriver-LearnKit.sln"
+      - name: NuGet パッケージ復元（安全）
         shell: powershell
+        run: |
+          $sln = Get-ChildItem -Path . -Recurse -Filter *.sln | Select-Object -First 1
+          if ($sln) {
+            Write-Host "Found solution: $($sln.FullName) -- running nuget restore"
+            nuget restore $sln.FullName
+          } else {
+            Write-Host "No .sln file found. Skipping nuget restore."
+          }
 
-      - name: Build solution
-        run: msbuild "WinAppDriver-LearnKit.sln" /p:Configuration=Debug /m
+      - name: ソリューション ビルド（シンプル フォールバック）
         shell: powershell
+        run: |
+          $sln = Get-ChildItem -Path . -Recurse -Filter *.sln | Select-Object -First 1
+          if (-not $sln) { Write-Error 'No .sln found in repository'; exit 1 }
 
-      - name: Install WinAppDriver
+          if (Get-Command msbuild.exe -ErrorAction SilentlyContinue) {
+            Write-Host "Using msbuild from PATH to build $($sln.FullName)"
+            msbuild $sln.FullName /p:Configuration=Debug /m
+          } elseif (Get-Command dotnet -ErrorAction SilentlyContinue) {
+            Write-Host "msbuild not found; falling back to dotnet build for $($sln.FullName)"
+            dotnet build $sln.FullName -c Debug
+          } else {
+            Write-Error "Neither msbuild nor dotnet found. Ensure Visual Studio or .NET SDK is available on the runner."
+            exit 1
+          }
+
+      - name: WinAppDriver インストール
+        shell: powershell
         run: choco install winappdriver -y
-        shell: powershell
 
-      - name: Start WinAppDriver
+      - name: WinAppDriver 起動
+        shell: powershell
         run: |
           $exe = 'C:\Program Files (x86)\Windows Application Driver\WinAppDriver.exe'
           if (-not (Test-Path $exe)) { Write-Host "WinAppDriver not found at $exe"; exit 1 }
           Start-Process -FilePath $exe -ArgumentList '4723'
           Start-Sleep -Seconds 5
-        shell: powershell
 
-      - name: Run tests (find vstest and run trx logger)
+      - name: テスト実行（vstest 検索・trx ロガー）
+        shell: powershell
         run: |
           $dll = Get-ChildItem -Path tests -Recurse -Filter *SampleApp.Tests.UI.dll | Select-Object -First 1
           if (-not $dll) { Write-Error 'Test assembly not found'; exit 1 }
@@ -55,9 +76,8 @@ jobs:
           if (-not $vstestCmd) { Write-Error 'vstest.console.exe not found on PATH or in Visual Studio installation'; exit 1 }
 
           & $vstestCmd $dll.FullName /Logger:trx
-        shell: powershell
 
-      - name: Upload TRX test results
+      - name: TRX テスト結果をアップロード
         uses: actions/upload-artifact@v4
         with:
           name: trx-results
