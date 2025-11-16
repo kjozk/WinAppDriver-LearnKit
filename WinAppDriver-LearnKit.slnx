@@ -1,0 +1,6 @@
+<Solution>
+  <Folder Name="/tests/">
+    <Project Path="tests/SampleApp.Tests.UI/SampleApp.Tests.UI.csproj" Id="12ffdeaa-29e7-419e-a8c0-c7e9cd08bbd9" />
+  </Folder>
+  <Project Path="src/SampleApp/SampleApp.csproj" Id="bf35019b-879b-480e-b65a-649afe49aa7a" />
+</Solution>
